@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Academic Control System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; color: #1f2937; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Custom inputs for inline editing */
+        .inline-edit { 
+            background: transparent; border: 1px solid transparent; border-radius: 0.25rem; 
+            padding: 2px 4px; width: 100%; transition: all 0.2s;
+        }
+        .inline-edit:hover { border-color: #d1d5db; background: rgba(255,255,255,0.5); }
+        .inline-edit:focus { border-color: #3b82f6; background: #fff; outline: none; box-shadow: 0 0 0 2px rgba(59,130,246,0.1); }
+        
+        /* Status Badges */
+        .status-submitted { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+        .status-not-submitted { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        
+        /* Toast animation */
+        @keyframes slideInUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .toast-enter { animation: slideInUp 0.3s ease-out forwards; }
+        
+        .tab-active { border-bottom: 2px solid #3b82f6; color: #2563eb; font-weight: 600; }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-sm">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-white border-r border-gray-200 flex flex-col hidden md:flex z-10 shadow-sm">
+        <div class="h-16 flex items-center px-6 border-b border-gray-200">
+            <i class="fas fa-graduation-cap text-blue-600 text-2xl mr-3"></i>
+            <span class="font-bold text-lg tracking-tight">EduControl</span>
+        </div>
+        
+        <div class="p-4 border-b border-gray-100 bg-gray-50">
+            <label class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">Current Group</label>
+            <select id="groupSelector" class="w-full bg-white border border-gray-300 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium shadow-sm transition-shadow cursor-pointer" onchange="changeGroup(this.value)">
+                <!-- Opciones inyectadas por JS -->
+            </select>
+        </div>
+
+        <nav class="flex-1 overflow-y-auto py-4">
+            <ul class="space-y-1 px-3">
+                <li><a href="#" onclick="showView('dashboard')" id="nav-dashboard" class="nav-item flex items-center px-3 py-2.5 text-gray-700 rounded-md hover:bg-blue-50 hover:text-blue-700 transition-colors bg-blue-50 text-blue-700"><i class="fas fa-chart-pie w-6 text-center mr-2"></i> Dashboard</a></li>
+                <li><a href="#" onclick="showView('students')" id="nav-students" class="nav-item flex items-center px-3 py-2.5 text-gray-700 rounded-md hover:bg-blue-50 hover:text-blue-700 transition-colors"><i class="fas fa-users w-6 text-center mr-2"></i> Students</a></li>
+                <li><a href="#" onclick="showView('homework')" id="nav-homework" class="nav-item flex items-center px-3 py-2.5 text-gray-700 rounded-md hover:bg-blue-50 hover:text-blue-700 transition-colors"><i class="fas fa-book w-6 text-center mr-2"></i> Homework</a></li>
+                <li><a href="#" onclick="showView('quizzes')" id="nav-quizzes" class="nav-item flex items-center px-3 py-2.5 text-gray-700 rounded-md hover:bg-blue-50 hover:text-blue-700 transition-colors"><i class="fas fa-file-alt w-6 text-center mr-2"></i> Quizzes</a></li>
+                <li><a href="#" onclick="showView('reports')" id="nav-reports" class="nav-item flex items-center px-3 py-2.5 text-gray-700 rounded-md hover:bg-blue-50 hover:text-blue-700 transition-colors"><i class="fas fa-chart-line w-6 text-center mr-2"></i> Reports</a></li>
+            </ul>
+        </nav>
+        
+        <div class="p-4 border-t border-gray-200">
+            <a href="#" onclick="showView('settings')" id="nav-settings" class="nav-item flex items-center px-3 py-2 text-gray-700 rounded-md hover:bg-gray-100 transition-colors"><i class="fas fa-cog w-6 text-center mr-2"></i> Settings</a>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-screen overflow-hidden relative bg-gray-50/50">
+        <!-- Top header for mobile and general actions -->
+        <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 shadow-sm z-10">
+            <div class="flex items-center md:hidden">
+                <i class="fas fa-graduation-cap text-blue-600 text-xl mr-2"></i>
+                <span class="font-bold text-lg">Edu</span>
+                <select id="mobileGroupSelector" class="ml-2 bg-gray-100 border-none rounded py-1 px-2 text-sm font-semibold max-w-[120px]" onchange="changeGroup(this.value)"></select>
+            </div>
+            
+            <!-- Contextual Header Title -->
+            <div class="hidden md:flex flex-col">
+                <h1 id="headerTitle" class="text-xl font-bold text-gray-800">Academic Dashboard</h1>
+                <span id="headerSubtitle" class="text-xs text-gray-500 font-medium uppercase tracking-wider">Group Data</span>
+            </div>
+
+            <div class="flex items-center space-x-4">
+                <div id="saveIndicator" class="flex items-center text-xs font-medium text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full opacity-0 transition-opacity duration-300">
+                    <i class="fas fa-check-circle text-green-500 mr-1.5"></i> Saved Automatically
+                </div>
+            </div>
+        </header>
+
+        <!-- Dynamic Content Area -->
+        <div id="contentArea" class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 hide-scrollbar">
+            
+            <!-- VISTA: DASHBOARD -->
+            <div id="view-dashboard" class="view-section">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col border-t-4 border-t-blue-500">
+                        <span class="text-sm font-semibold text-gray-500 uppercase mb-1 flex items-center"><i class="fas fa-users mr-2 text-blue-400"></i>Total Students</span>
+                        <span id="dash-students" class="text-4xl font-bold text-gray-800">0</span>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col border-t-4 border-t-indigo-500">
+                        <span class="text-sm font-semibold text-gray-500 uppercase mb-1 flex items-center"><i class="fas fa-book mr-2 text-indigo-400"></i>Total Homework</span>
+                        <span id="dash-hw" class="text-4xl font-bold text-gray-800">0</span>
+                        <div class="mt-4 flex justify-between text-xs font-medium">
+                            <span class="text-green-600 flex items-center"><i class="fas fa-check-circle mr-1"></i><span id="dash-hw-sub">0%</span> Sub</span>
+                            <span class="text-red-500 flex items-center"><i class="fas fa-times-circle mr-1"></i><span id="dash-hw-notsub">0%</span> Not Sub</span>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col border-t-4 border-t-purple-500">
+                        <span class="text-sm font-semibold text-gray-500 uppercase mb-1 flex items-center"><i class="fas fa-file-alt mr-2 text-purple-400"></i>Total Quizzes</span>
+                        <span id="dash-quizzes" class="text-4xl font-bold text-gray-800">0</span>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col border-t-4 border-t-emerald-500">
+                        <span class="text-sm font-semibold text-gray-500 uppercase mb-1 flex items-center"><i class="fas fa-star mr-2 text-emerald-400"></i>Quiz Average</span>
+                        <span id="dash-quiz-avg" class="text-4xl font-bold text-gray-800">0%</span>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <h3 class="font-bold text-lg mb-4 text-gray-800 border-b pb-2">Recent Activities Overview</h3>
+                        <div id="dash-recent-list" class="space-y-3">
+                            <!-- Injected by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VISTA: STUDENTS -->
+            <div id="view-students" class="view-section hidden">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-full">
+                    <div class="p-4 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row justify-between items-center gap-4">
+                        <div class="relative w-full sm:w-64">
+                            <i class="fas fa-search absolute left-3 top-2.5 text-gray-400"></i>
+                            <input type="text" id="searchStudent" placeholder="Search students..." class="w-full pl-9 pr-3 py-2 rounded-md border border-gray-300 focus:ring-blue-500 focus:border-blue-500 text-sm" onkeyup="renderStudents()">
+                        </div>
+                        <div class="flex gap-2 w-full sm:w-auto">
+                            <button onclick="openModal('addStudentModal')" class="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm transition"><i class="fas fa-plus mr-1"></i> Add Single</button>
+                            <button onclick="openModal('bulkStudentModal')" class="flex-1 sm:flex-none bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-4 py-2 rounded-md text-sm font-medium shadow-sm transition"><i class="fas fa-users mr-1"></i> Bulk Add</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left whitespace-nowrap">
+                            <thead class="bg-white border-b border-gray-200">
+                                <tr>
+                                    <th class="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider w-12">#</th>
+                                    <th class="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Student Name</th>
+                                    <th class="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="studentsTableBody" class="divide-y divide-gray-100 bg-white">
+                                <!-- Injected by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VISTA: HOMEWORK -->
+            <div id="view-homework" class="view-section hidden flex flex-col h-full gap-4">
+                
+                <!-- HW Header / Controls -->
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div class="flex space-x-2 bg-white rounded-lg shadow-sm border border-gray-200 p-1">
+                        <button onclick="switchHwTab('list')" id="hw-tab-list" class="px-4 py-1.5 rounded-md text-sm font-medium bg-blue-50 text-blue-700 transition">List View</button>
+                        <button onclick="switchHwTab('weeks')" id="hw-tab-weeks" class="px-4 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-50 transition"><i class="fas fa-calendar-alt mr-1"></i> Manage Weeks</button>
+                    </div>
+                    <button onclick="openModal('addHwModal')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm transition"><i class="fas fa-plus mr-1"></i> Create Homework</button>
+                </div>
+
+                <!-- HW List View -->
+                <div id="hw-view-list" class="flex-1 overflow-y-auto">
+                    <div id="hwAccordionContainer" class="space-y-4">
+                        <!-- Injected by JS: Groups of HW by Week -->
+                    </div>
+                </div>
+
+                <!-- Manage Weeks View (Hidden initially) -->
+                <div id="hw-view-weeks" class="hidden flex-1 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+                    <div class="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                        <h3 class="font-bold text-gray-700">Course Weeks Configuration</h3>
+                        <button onclick="addWeek()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-sm font-medium shadow-sm"><i class="fas fa-plus mr-1"></i> Add Week</button>
+                    </div>
+                    <div class="overflow-y-auto p-4">
+                        <p class="text-xs text-gray-500 mb-4 mb-4"><i class="fas fa-info-circle"></i> Add as many weeks as you need. Changes apply only to the current group.</p>
+                        <ul id="weeksList" class="space-y-2">
+                            <!-- Injected by JS -->
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Detail/Grading View (Hidden initially, covers the area when a HW is selected) -->
+                <div id="hw-view-detail" class="hidden flex-1 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col absolute inset-4 sm:inset-6 lg:inset-8 z-20">
+                    <div class="p-4 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row justify-between items-center gap-4">
+                        <div>
+                            <button onclick="closeHwDetail()" class="text-gray-500 hover:text-gray-700 mr-2"><i class="fas fa-arrow-left"></i></button>
+                            <span id="detail-hw-title" class="font-bold text-lg text-gray-800">Homework Title</span>
+                            <span id="detail-hw-week" class="ml-2 text-xs bg-blue-100 text-blue-800 py-1 px-2 rounded-full font-semibold">Week X</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="markAllHw('submitted')" class="bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 px-3 py-1.5 rounded text-xs font-semibold transition"><i class="fas fa-check-double mr-1"></i> All Submitted</button>
+                            <button onclick="markAllHw('not-submitted')" class="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-3 py-1.5 rounded text-xs font-semibold transition"><i class="fas fa-times-circle mr-1"></i> All Not Sub.</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto flex-1 p-0">
+                        <table class="w-full text-left whitespace-nowrap">
+                            <thead class="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+                                <tr>
+                                    <th class="px-6 py-3 text-xs font-semibold text-gray-500 uppercase w-1/3">Student</th>
+                                    <th class="px-6 py-3 text-xs font-semibold text-gray-500 uppercase w-1/3 text-center">Status</th>
+                                    <th class="px-6 py-3 text-xs font-semibold text-gray-500 uppercase w-1/3 text-center">Grade (Opt)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="hwGradingTableBody" class="divide-y divide-gray-100">
+                                <!-- Injected by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VISTA: QUIZZES -->
+            <div id="view-quizzes" class="view-section hidden flex flex-col h-full gap-4">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-bold text-gray-800">Quizzes Configuration</h2>
+                    <button onclick="openModal('addQuizModal')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm transition"><i class="fas fa-plus mr-1"></i> Create Quiz</button>
+                </div>
+
+                <div id="quizListContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <!-- Injected by JS: Quiz Cards -->
+                </div>
+
+                <!-- Quiz Detail/Grading View -->
+                <div id="quiz-view-detail" class="hidden flex-1 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col absolute inset-4 sm:inset-6 lg:inset-8 z-20">
+                    <div class="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                        <div>
+                            <button onclick="closeQuizDetail()" class="text-gray-500 hover:text-gray-700 mr-2"><i class="fas fa-arrow-left"></i></button>
+                            <span id="detail-quiz-title" class="font-bold text-lg text-gray-800">Quiz Title</span>
+                            <span id="detail-quiz-max" class="ml-2 text-xs bg-purple-100 text-purple-800 py-1 px-2 rounded-full font-semibold">Max: 10</span>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto flex-1 p-0">
+                        <table class="w-full text-left whitespace-nowrap">
+                            <thead class="bg-white border-b border-gray-200 sticky top-0 shadow-sm z-10">
+                                <tr>
+                                    <th class="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Student</th>
+                                    <th class="px-6 py-3 text-xs font-semibold text-gray-500 uppercase text-right">Score</th>
+                                </tr>
+                            </thead>
+                            <tbody id="quizGradingTableBody" class="divide-y divide-gray-100">
+                                <!-- Injected by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VISTA: REPORTS -->
+            <div id="view-reports" class="view-section hidden">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                    <h3 class="font-bold text-gray-800 mb-4 border-b pb-2">Individual Student Report</h3>
+                    <div class="max-w-md mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Select Student</label>
+                        <select id="reportStudentSelector" onchange="generateStudentReport(this.value)" class="w-full bg-gray-50 border border-gray-300 rounded-md py-2 px-3 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">-- Choose a student --</option>
+                            <!-- Injected -->
+                        </select>
+                    </div>
+
+                    <div id="reportContent" class="hidden">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 bg-gray-50 p-4 rounded-lg border border-gray-100">
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase font-semibold">STUDENT NAME</p>
+                                <p id="rep-student-name" class="text-xl font-bold text-gray-800">Name</p>
+                            </div>
+                            <div class="flex gap-4">
+                                <div>
+                                    <p class="text-xs text-gray-500 uppercase font-semibold">Homework Completion</p>
+                                    <p id="rep-hw-comp" class="text-xl font-bold text-blue-600">0%</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-gray-500 uppercase font-semibold">Quiz Average</p>
+                                    <p id="rep-quiz-avg" class="text-xl font-bold text-purple-600">0%</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <!-- HW History -->
+                            <div>
+                                <h4 class="font-bold text-gray-700 mb-3 flex items-center"><i class="fas fa-book text-gray-400 mr-2"></i> HOMEWORK</h4>
+                                <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                                    <table class="w-full text-left text-sm">
+                                        <thead class="bg-gray-50 border-b border-gray-200">
+                                            <tr><th class="px-3 py-2 font-semibold">Name</th><th class="px-3 py-2 font-semibold">Week</th><th class="px-3 py-2 font-semibold">Status</th><th class="px-3 py-2 font-semibold">Grade</th></tr>
+                                        </thead>
+                                        <tbody id="rep-hw-body" class="divide-y divide-gray-100"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <!-- Quiz History -->
+                            <div>
+                                <h4 class="font-bold text-gray-700 mb-3 flex items-center"><i class="fas fa-file-alt text-gray-400 mr-2"></i> QUIZZES</h4>
+                                <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                                    <table class="w-full text-left text-sm">
+                                        <thead class="bg-gray-50 border-b border-gray-200">
+                                            <tr><th class="px-3 py-2 font-semibold">Name</th><th class="px-3 py-2 font-semibold">Week</th><th class="px-3 py-2 font-semibold">Grade / Max</th></tr>
+                                        </thead>
+                                        <tbody id="rep-quiz-body" class="divide-y divide-gray-100"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VISTA: SETTINGS -->
+            <div id="view-settings" class="view-section hidden max-w-4xl">
+                
+                <!-- Data Status & Backup -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                    <h3 class="font-bold text-lg text-gray-800 mb-4 border-b pb-2"><i class="fas fa-database text-blue-500 mr-2"></i> DATA BACKUP & STATUS</h3>
+                    <p class="text-sm text-gray-600 mb-4 bg-blue-50 p-3 rounded border border-blue-100"><i class="fas fa-info-circle text-blue-500 mr-1"></i> Your academic records are saved automatically on this device via localStorage. For additional protection, create a backup regularly.</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div class="bg-gray-50 p-3 rounded border border-gray-200">
+                            <p class="text-xs text-gray-500 uppercase font-semibold">Last Saved</p>
+                            <p id="set-last-saved" class="font-medium text-gray-800">Never</p>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded border border-gray-200">
+                            <p class="text-xs text-gray-500 uppercase font-semibold">Last Backup Exported</p>
+                            <p id="set-last-backup" class="font-medium text-gray-800">Never</p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap gap-3">
+                        <button onclick="exportDataJSON()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow-sm text-sm font-medium transition"><i class="fas fa-download mr-2"></i> EXPORT DATA (JSON)</button>
+                        <button onclick="document.getElementById('importFile').click()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded border border-gray-300 shadow-sm text-sm font-medium transition"><i class="fas fa-upload mr-2"></i> IMPORT DATA (JSON)</button>
+                        <input type="file" id="importFile" accept=".json" class="hidden" onchange="importDataJSON(event)">
+                        
+                        <button onclick="exportCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded shadow-sm text-sm font-medium transition ml-auto"><i class="fas fa-file-csv mr-2"></i> EXPORT CSV</button>
+                    </div>
+                </div>
+
+                <!-- Group Management -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                    <div class="flex justify-between items-center mb-4 border-b pb-2">
+                        <h3 class="font-bold text-lg text-gray-800"><i class="fas fa-layer-group text-indigo-500 mr-2"></i> GROUP MANAGEMENT</h3>
+                        <button onclick="addNewGroup()" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-3 py-1.5 rounded text-sm font-semibold transition"><i class="fas fa-plus mr-1"></i> Add Group</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead class="bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                    <th class="px-4 py-2 text-xs font-semibold text-gray-500 uppercase">Group Name</th>
+                                    <th class="px-4 py-2 text-xs font-semibold text-gray-500 uppercase">Students</th>
+                                    <th class="px-4 py-2 text-xs font-semibold text-gray-500 uppercase text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="settingsGroupsBody" class="divide-y divide-gray-100">
+                                <!-- Injected -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Danger Zone -->
+                <div class="bg-white rounded-xl shadow-sm border border-red-200 p-6">
+                    <h3 class="font-bold text-lg text-red-700 mb-2"><i class="fas fa-exclamation-triangle mr-2"></i> DANGER ZONE</h3>
+                    <p class="text-sm text-gray-600 mb-4">This action will permanently delete all data for ALL groups. It cannot be undone without a backup.</p>
+                    <button onclick="initiateResetAll()" class="bg-white border-2 border-red-500 text-red-600 hover:bg-red-50 px-4 py-2 rounded shadow-sm text-sm font-bold transition">RESET ALL DATA</button>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- MODALS -->
+    <!-- Modal Overlay -->
+    <div id="modalOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden flex items-center justify-center p-4">
+        
+        <!-- Add Single Student Modal -->
+        <div id="addStudentModal" class="bg-white rounded-xl shadow-xl w-full max-w-md hidden flex flex-col transform transition-all">
+            <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="font-bold text-lg">Add Student</h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                <input type="text" id="newStudentName" class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. John Doe" onkeyup="if(event.key==='Enter') addStudent()">
+            </div>
+            <div class="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-2 rounded-b-xl">
+                <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded">Cancel</button>
+                <button onclick="addStudent()" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded shadow-sm">Save</button>
+            </div>
+        </div>
+
+        <!-- Bulk Add Students Modal -->
+        <div id="bulkStudentModal" class="bg-white rounded-xl shadow-xl w-full max-w-lg hidden flex flex-col">
+            <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="font-bold text-lg">Bulk Add Students</h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6">
+                <p class="text-sm text-gray-500 mb-2">Paste a list of names. One student per line.</p>
+                <textarea id="bulkStudentList" rows="8" class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500 text-sm whitespace-pre" placeholder="Juan Pérez&#10;María López&#10;Carlos Hernández"></textarea>
+            </div>
+            <div class="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-2 rounded-b-xl">
+                <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded">Cancel</button>
+                <button onclick="processBulkAdd()" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded shadow-sm">Import Names</button>
+            </div>
+        </div>
+
+        <!-- Add Homework Modal -->
+        <div id="addHwModal" class="bg-white rounded-xl shadow-xl w-full max-w-md hidden flex flex-col">
+            <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="font-bold text-lg">Create Homework</h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Homework Name</label>
+                    <input type="text" id="hwName" class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Essay 1">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Week</label>
+                        <select id="hwWeek" class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500"></select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                        <input type="date" id="hwDate" class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
+                    <input type="text" id="hwDesc" class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+            </div>
+            <div class="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-2 rounded-b-xl">
+                <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded">Cancel</button>
+                <button onclick="saveHomework()" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded shadow-sm">Save Homework</button>
+            </div>
+        </div>
+
+        <!-- Add Quiz Modal -->
+        <div id="addQuizModal" class="bg-white rounded-xl shadow-xl w-full max-w-md hidden flex flex-col">
+            <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="font-bold text-lg">Create Quiz</h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Quiz Name</label>
+                    <input type="text" id="quizName" class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Week</label>
+                        <select id="quizWeek" class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500"></select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                        <input type="date" id="quizDate" class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Maximum Score</label>
+                    <input type="number" id="quizMax" value="10" min="1" class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+            </div>
+            <div class="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-2 rounded-b-xl">
+                <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded">Cancel</button>
+                <button onclick="saveQuiz()" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded shadow-sm">Save Quiz</button>
+            </div>
+        </div>
+
+        <!-- Confirm Modal -->
+        <div id="confirmModal" class="bg-white rounded-xl shadow-xl w-full max-w-sm hidden flex flex-col text-center p-6">
+            <div class="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
+            </div>
+            <h3 class="font-bold text-lg mb-2" id="confirmTitle">Confirm Action</h3>
+            <p class="text-sm text-gray-500 mb-6" id="confirmMsg">Are you sure you want to proceed?</p>
+            <div class="flex justify-center gap-3">
+                <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded flex-1">Cancel</button>
+                <button id="confirmBtn" class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded flex-1">Delete</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- CONSTANTS & STATE ---
+        const STORAGE_KEY = 'eduControl_data_v1';
+        let appData = { settings: {}, groups: [], currentGroupId: null };
+        let activeModal = null;
+        let currentHwContext = null;
+        let currentQuizContext = null;
+        let pendingConfirmAction = null;
+
+        // Default mock data (only loaded if storage is completely empty)
+        const generateInitialData = () => {
+            const today = new Date().toISOString().split('T')[0];
+            const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            
+            return {
+                settings: { lastSaved: null, lastBackup: null },
+                currentGroupId: 'g1',
+                groups: [
+                    {
+                        id: 'g1', name: 'Group 1',
+                        students: [
+                            {id: 's1_1', name: 'Juan Pérez'}, {id: 's1_2', name: 'María López'}, {id: 's1_3', name: 'Carlos Hernández'}
+                        ],
+                        weeks: [
+                            {id: 'w1_3', name: 'Week 3', order: 3}, {id: 'w1_4', name: 'Week 4', order: 4}
+                        ],
+                        homeworks: [
+                            {id: 'hw1_1', title: 'Personal Information', weekId: 'w1_3', date: today, desc: ''},
+                            {id: 'hw1_2', title: 'Verb To Be Practice', weekId: 'w1_4', date: nextWeek, desc: ''}
+                        ],
+                        quizzes: [
+                            {id: 'q1_1', title: 'Greetings', weekId: 'w1_3', date: today, max: 10},
+                            {id: 'q1_2', title: 'Verb To Be', weekId: 'w1_4', date: nextWeek, max: 10}
+                        ],
+                        submissions: {}, quizGrades: {}
+                    },
+                    {
+                        id: 'g2', name: 'Group 2',
+                        students: [
+                            {id: 's2_1', name: 'Ana García'}, {id: 's2_2', name: 'Luis Martínez'}, {id: 's2_3', name: 'Sofía Torres'}
+                        ],
+                        weeks: [{id: 'w2_3', name: 'Week 3', order: 3}, {id: 'w2_4', name: 'Week 4', order: 4}],
+                        homeworks: [
+                            {id: 'hw2_1', title: 'Personal Information', weekId: 'w2_3', date: today, desc: ''},
+                            {id: 'hw2_2', title: 'Daily Routines', weekId: 'w2_4', date: nextWeek, desc: ''}
+                        ],
+                        quizzes: [
+                            {id: 'q2_1', title: 'Greetings', weekId: 'w2_3', date: today, max: 10},
+                            {id: 'q2_2', title: 'Daily Routines', weekId: 'w2_4', date: nextWeek, max: 10}
+                        ],
+                        submissions: {}, quizGrades: {}
+                    },
+                    {
+                        id: 'g3', name: 'Group 3',
+                        students: [
+                            {id: 's3_1', name: 'Pedro Ramírez'}, {id: 's3_2', name: 'Daniela Flores'}, {id: 's3_3', name: 'Miguel Sánchez'}
+                        ],
+                        weeks: [{id: 'w3_3', name: 'Week 3', order: 3}, {id: 'w3_4', name: 'Week 4', order: 4}],
+                        homeworks: [
+                            {id: 'hw3_1', title: 'Prepositions Practice', weekId: 'w3_3', date: today, desc: ''},
+                            {id: 'hw3_2', title: 'Present Continuous', weekId: 'w3_4', date: nextWeek, desc: ''}
+                        ],
+                        quizzes: [
+                            {id: 'q3_1', title: 'Prepositions', weekId: 'w3_3', date: today, max: 10},
+                            {id: 'q3_2', title: 'Present Continuous', weekId: 'w3_4', date: nextWeek, max: 10}
+                        ],
+                        submissions: {}, quizGrades: {}
+                    }
+                ]
+            };
+        };
+
+        // --- CORE FUNCTIONS (Storage & State) ---
+        function generateId() { return Math.random().toString(36).substr(2, 9); }
+        
+        function initApp() {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                try {
+                    appData = JSON.parse(stored);
+                } catch(e) { console.error("Error parsing localStorage", e); }
+            } else {
+                appData = generateInitialData();
+                saveData(false); // Initial save without toast
+            }
+            
+            if(!appData.currentGroupId && appData.groups.length > 0) appData.currentGroupId = appData.groups[0].id;
+            
+            updateGroupSelectors();
+            showView('dashboard');
+            populateSettings();
+        }
+
+        // Auto-save function. Called after ANY modification.
+        let saveTimeout;
+        function saveData(showToastMsg = true) {
+            appData.settings.lastSaved = new Date().toLocaleString();
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+            
+            if(showToastMsg) {
+                const ind = document.getElementById('saveIndicator');
+                ind.classList.remove('opacity-0');
+                ind.classList.add('toast-enter');
+                clearTimeout(saveTimeout);
+                saveTimeout = setTimeout(() => {
+                    ind.classList.remove('toast-enter');
+                    ind.classList.add('opacity-0');
+                }, 2000);
+            }
+            
+            // Minimal UI updates that depend on save
+            const el = document.getElementById('set-last-saved');
+            if(el) el.innerText = appData.settings.lastSaved;
+        }
+
+        function getCurrentGroup() {
+            return appData.groups.find(g => g.id === appData.currentGroupId) || appData.groups[0];
+        }
+
+        // --- NAVIGATION & UI ---
+        function showView(viewId) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`view-${viewId}`).classList.remove('hidden');
+            
+            document.querySelectorAll('.nav-item').forEach(el => {
+                el.classList.remove('bg-blue-50', 'text-blue-700', 'font-semibold');
+                el.classList.add('text-gray-700');
+            });
+            const activeNav = document.getElementById(`nav-${viewId}`);
+            if(activeNav) {
+                activeNav.classList.remove('text-gray-700');
+                activeNav.classList.add('bg-blue-50', 'text-blue-700', 'font-semibold');
+            }
+
+            const titles = {
+                'dashboard': 'Academic Dashboard', 'students': 'Student Roster',
+                'homework': 'Homework Tracker', 'quizzes': 'Quizzes & Grades',
+                'reports': 'Academic Reports', 'settings': 'System Settings'
+            };
+            document.getElementById('headerTitle').innerText = titles[viewId];
+            
+            const g = getCurrentGroup();
+            document.getElementById('headerSubtitle').innerText = g ? g.name.toUpperCase() : '';
+
+            // Render specific view data
+            if(viewId === 'dashboard') renderDashboard();
+            if(viewId === 'students') renderStudents();
+            if(viewId === 'homework') { closeHwDetail(); renderHomeworkList(); renderWeeksList(); }
+            if(viewId === 'quizzes') { closeQuizDetail(); renderQuizList(); }
+            if(viewId === 'reports') populateReportSelector();
+        }
+
+        function updateGroupSelectors() {
+            const selectors = [document.getElementById('groupSelector'), document.getElementById('mobileGroupSelector')];
+            let html = appData.groups.map(g => `<option value="${g.id}" ${g.id === appData.currentGroupId ? 'selected' : ''}>${g.name}</option>`).join('');
+            selectors.forEach(sel => { if(sel) sel.innerHTML = html; });
+        }
+
+        function changeGroup(groupId) {
+            appData.currentGroupId = groupId;
+            updateGroupSelectors();
+            saveData();
+            // Re-render current view implicitly by clicking the active nav
+            const activeNav = document.querySelector('.nav-item.bg-blue-50');
+            if(activeNav) activeNav.click();
+        }
+
+        // --- MODALS ---
+        function openModal(id) {
+            document.getElementById('modalOverlay').classList.remove('hidden');
+            document.getElementById(id).classList.remove('hidden');
+            activeModal = id;
+            
+            // Populates dynamic selects before showing
+            if(id === 'addHwModal' || id === 'addQuizModal') {
+                const g = getCurrentGroup();
+                const selId = id === 'addHwModal' ? 'hwWeek' : 'quizWeek';
+                const sel = document.getElementById(selId);
+                // Sort weeks by order or name conceptually.
+                const sortedWeeks = [...g.weeks].sort((a,b) => {
+                    const numA = parseInt(a.name.replace(/\D/g, '')) || 0;
+                    const numB = parseInt(b.name.replace(/\D/g, '')) || 0;
+                    return numA - numB;
+                });
+                sel.innerHTML = sortedWeeks.map(w => `<option value="${w.id}">${w.name}</option>`).join('');
+                if(sortedWeeks.length === 0) sel.innerHTML = '<option value="">No weeks found (Add in Manage Weeks)</option>';
+                
+                // Clear inputs
+                if(id==='addHwModal') { document.getElementById('hwName').value = ''; document.getElementById('hwDesc').value = ''; }
+                if(id==='addQuizModal') { document.getElementById('quizName').value = ''; document.getElementById('quizMax').value = '10'; }
+            }
+        }
+
+        function closeModal() {
+            if(activeModal) document.getElementById(activeModal).classList.add('hidden');
+            document.getElementById('modalOverlay').classList.add('hidden');
+            activeModal = null;
+            pendingConfirmAction = null;
+        }
+
+        function askConfirm(title, message, actionFn, isDanger = false) {
+            document.getElementById('confirmTitle').innerText = title;
+            document.getElementById('confirmMsg').innerText = message;
+            const btn = document.getElementById('confirmBtn');
+            btn.className = `px-4 py-2 text-sm font-medium text-white rounded flex-1 ${isDanger ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`;
+            btn.innerText = isDanger ? 'Delete' : 'Confirm';
+            pendingConfirmAction = actionFn;
+            
+            btn.onclick = () => {
+                if(pendingConfirmAction) pendingConfirmAction();
+                closeModal();
+            };
+            openModal('confirmModal');
+        }
+
+        // --- DASHBOARD ---
+        function renderDashboard() {
+            const g = getCurrentGroup();
+            if(!g) return;
+            
+            document.getElementById('dash-students').innerText = g.students.length;
+            document.getElementById('dash-hw').innerText = g.homeworks.length;
+            document.getElementById('dash-quizzes').innerText = g.quizzes.length;
+            
+            let totalSub = 0, totalPossible = g.students.length * g.homeworks.length;
+            let hwHtml = '';
+            
+            if(totalPossible > 0) {
+                Object.values(g.submissions).forEach(s => { if(s.status === 'submitted') totalSub++; });
+                const subPct = Math.round((totalSub / totalPossible) * 100);
+                document.getElementById('dash-hw-sub').innerText = subPct + '%';
+                document.getElementById('dash-hw-notsub').innerText = (100 - subPct) + '%';
+            } else {
+                document.getElementById('dash-hw-sub').innerText = '0%';
+                document.getElementById('dash-hw-notsub').innerText = '0%';
+            }
+
+            let totalQuizGrades = 0, quizCount = 0;
+            g.quizzes.forEach(q => {
+                g.students.forEach(s => {
+                    const record = g.quizGrades[`${q.id}_${s.id}`];
+                    if(record && record.grade !== null && record.grade !== '') {
+                        totalQuizGrades += (Number(record.grade) / q.max) * 100;
+                        quizCount++;
+                    }
+                });
+            });
+            document.getElementById('dash-quiz-avg').innerText = quizCount > 0 ? Math.round(totalQuizGrades / quizCount) + '%' : '0%';
+
+            // Recent List (Last 5 combined)
+            const recent = [...g.homeworks.map(h=>({...h, type:'Homework'})), ...g.quizzes.map(q=>({...q, type:'Quiz'}))]
+                .sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0))
+                .slice(0, 5);
+            
+            document.getElementById('dash-recent-list').innerHTML = recent.length ? recent.map(item => `
+                <div class="flex justify-between items-center p-3 hover:bg-gray-50 rounded-lg border border-gray-100 transition">
+                    <div class="flex items-center">
+                        <div class="w-8 h-8 rounded-full ${item.type==='Homework' ? 'bg-indigo-100 text-indigo-600' : 'bg-purple-100 text-purple-600'} flex items-center justify-center mr-3">
+                            <i class="fas ${item.type==='Homework' ? 'fa-book' : 'fa-file-alt'}"></i>
+                        </div>
+                        <div>
+                            <p class="font-semibold text-gray-800 text-sm">${item.title}</p>
+                            <p class="text-xs text-gray-500">${item.type} • Due: ${item.date || 'No date'}</p>
+                        </div>
+                    </div>
+                </div>
+            `).join('') : '<p class="text-sm text-gray-500">No recent activities.</p>';
+        }
+
+        // --- STUDENTS ---
+        function renderStudents() {
+            const g = getCurrentGroup();
+            if(!g) return;
+            const search = document.getElementById('searchStudent').value.toLowerCase();
+            const filtered = g.students.filter(s => s.name.toLowerCase().includes(search));
+            
+            // Sort alphabetically
+            filtered.sort((a,b) => a.name.localeCompare(b.name));
+
+            const tbody = document.getElementById('studentsTableBody');
+            tbody.innerHTML = filtered.map((s, idx) => `
+                <tr class="hover:bg-gray-50 transition group">
+                    <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-500">${idx + 1}</td>
+                    <td class="px-6 py-3 whitespace-nowrap">
+                        <input type="text" value="${s.name}" onblur="updateStudentName('${s.id}', this.value)" class="inline-edit font-medium text-gray-800">
+                    </td>
+                    <td class="px-6 py-3 whitespace-nowrap text-right">
+                        <button onclick="askConfirm('Delete Student', 'Are you sure you want to delete ${s.name}? All their grades will be kept in database but hidden.', () => deleteStudent('${s.id}'), true)" class="text-gray-400 hover:text-red-500 transition opacity-0 group-hover:opacity-100 p-1">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+            
+            if(filtered.length === 0) tbody.innerHTML = `<tr><td colspan="3" class="px-6 py-8 text-center text-gray-500">No students found.</td></tr>`;
+        }
+
+        function addStudent() {
+            const nameInput = document.getElementById('newStudentName');
+            const name = nameInput.value.trim();
+            if(!name) return;
+            const g = getCurrentGroup();
+            g.students.push({ id: 's_'+generateId(), name });
+            saveData();
+            renderStudents();
+            closeModal();
+            nameInput.value = '';
+        }
+
+        function processBulkAdd() {
+            const text = document.getElementById('bulkStudentList').value;
+            const names = text.split('\n').map(n => n.trim()).filter(n => n.length > 0);
+            if(names.length === 0) return;
+            const g = getCurrentGroup();
+            names.forEach(name => g.students.push({ id: 's_'+generateId(), name }));
+            saveData();
+            renderStudents();
+            closeModal();
+            document.getElementById('bulkStudentList').value = '';
+        }
+
+        function updateStudentName(id, newName) {
+            const g = getCurrentGroup();
+            const s = g.students.find(x => x.id === id);
+            if(s && newName.trim() && s.name !== newName.trim()) {
+                s.name = newName.trim();
+                saveData();
+            } else if (s) {
+                renderStudents(); // Revert if empty
+            }
+        }
+
+        function deleteStudent(id) {
+            const g = getCurrentGroup();
+            g.students = g.students.filter(x => x.id !== id);
+            saveData();
+            renderStudents();
+        }
+
+        // --- WEEKS MANAGEMENT ---
+        function getSortedWeeks(group) {
+            return [...group.weeks].sort((a,b) => {
+                const numA = parseInt(a.name.replace(/\D/g, '')) || 0;
+                const numB = parseInt(b.name.replace(/\D/g, '')) || 0;
+                return numA - numB;
+            });
+        }
+
+        function renderWeeksList() {
+            const g = getCurrentGroup();
+            const list = document.getElementById('weeksList');
+            const weeks = getSortedWeeks(g);
+            
+            list.innerHTML = weeks.map(w => `
+                <li class="flex justify-between items-center p-3 bg-white border border-gray-200 rounded shadow-sm hover:border-gray-300 transition group">
+                    <input type="text" value="${w.name}" onblur="updateWeekName('${w.id}', this.value)" class="inline-edit font-semibold text-gray-700 max-w-[200px]">
+                    <button onclick="askConfirm('Delete Week', 'Delete this week? Items will become unassigned.', () => deleteWeek('${w.id}'), true)" class="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition p-1">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </li>
+            `).join('');
+            if(weeks.length === 0) list.innerHTML = '<li class="text-sm text-gray-500 text-center py-4">No weeks created. Add one to start organizing.</li>';
+        }
+
+        function addWeek() {
+            const g = getCurrentGroup();
+            const nextNum = g.weeks.length + 1; // Simplistic
+            g.weeks.push({ id: 'w_'+generateId(), name: `Week ${nextNum}` });
+            saveData();
+            renderWeeksList();
+            renderHomeworkList();
+        }
+        
+        function updateWeekName(id, name) {
+            if(!name.trim()) return renderWeeksList();
+            const g = getCurrentGroup();
+            const w = g.weeks.find(x => x.id === id);
+            if(w && w.name !== name) { w.name = name.trim(); saveData(); renderHomeworkList(); renderQuizList(); }
+        }
+        
+        function deleteWeek(id) {
+            const g = getCurrentGroup();
+            g.weeks = g.weeks.filter(x => x.id !== id);
+            // Move items to unassigned
+            g.homeworks.forEach(h => { if(h.weekId === id) h.weekId = null; });
+            g.quizzes.forEach(q => { if(q.weekId === id) q.weekId = null; });
+            saveData();
+            renderWeeksList();
+            renderHomeworkList();
+            renderQuizList();
+        }
+
+        // --- HOMEWORK ---
+        function switchHwTab(tab) {
+            document.getElementById('hw-view-list').classList.toggle('hidden', tab !== 'list');
+            document.getElementById('hw-view-weeks').classList.toggle('hidden', tab !== 'weeks');
+            document.getElementById('hw-tab-list').className = tab === 'list' ? 'px-4 py-1.5 rounded-md text-sm font-medium bg-blue-50 text-blue-700 transition' : 'px-4 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-50 transition';
+            document.getElementById('hw-tab-weeks').className = tab === 'weeks' ? 'px-4 py-1.5 rounded-md text-sm font-medium bg-blue-50 text-blue-700 transition' : 'px-4 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-50 transition';
+        }
+
+        function saveHomework() {
+            const name = document.getElementById('hwName').value.trim();
+            const weekId = document.getElementById('hwWeek').value;
+            const date = document.getElementById('hwDate').value;
+            const desc = document.getElementById('hwDesc').value.trim();
+            if(!name || !weekId) return alert('Name and Week are required');
+            
+            const g = getCurrentGroup();
+            g.homeworks.push({ id: 'hw_'+generateId(), title: name, weekId, date, desc });
+            saveData();
+            closeModal();
+            renderHomeworkList();
+        }
+
+        function renderHomeworkList() {
+            const g = getCurrentGroup();
+            const container = document.getElementById('hwAccordionContainer');
+            const weeks = getSortedWeeks(g);
+            
+            let html = '';
+            weeks.forEach(w => {
+                const hwForWeek = g.homeworks.filter(h => h.weekId === w.id);
+                if(hwForWeek.length === 0) return;
+                
+                html += `
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="bg-gray-50 px-4 py-3 border-b border-gray-200 font-bold text-gray-700 flex justify-between">
+                        <span>${w.name}</span>
+                        <span class="text-xs bg-gray-200 text-gray-600 py-0.5 px-2 rounded-full">${hwForWeek.length} tasks</span>
+                    </div>
+                    <ul class="divide-y divide-gray-100">
+                        ${hwForWeek.map(h => `
+                            <li class="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 hover:bg-blue-50/30 transition cursor-pointer" onclick="openHwDetail(event, '${h.id}')">
+                                <div class="flex-1 min-w-0 pr-4">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <input type="text" value="${h.title}" onblur="updateHwInline('${h.id}', 'title', this.value)" class="inline-edit font-semibold text-gray-800 text-base" onclick="event.stopPropagation()">
+                                    </div>
+                                    <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                                        <span><i class="far fa-calendar mr-1"></i></span>
+                                        <input type="date" value="${h.date}" onblur="updateHwInline('${h.id}', 'date', this.value)" class="inline-edit w-auto py-0 text-xs" onclick="event.stopPropagation()">
+                                        ${h.desc ? `<span class="truncate max-w-[200px] border-l border-gray-300 pl-2 ml-1" title="${h.desc}">${h.desc}</span>` : ''}
+                                    </div>
+                                </div>
+                                <div class="mt-2 sm:mt-0 flex items-center gap-2">
+                                    <select onchange="updateHwInline('${h.id}', 'weekId', this.value)" onclick="event.stopPropagation()" class="text-xs border-gray-300 rounded py-1 pl-2 pr-6 focus:ring-blue-500">
+                                        ${weeks.map(ww => `<option value="${ww.id}" ${ww.id===h.weekId?'selected':''}>${ww.name}</option>`).join('')}
+                                    </select>
+                                    <button onclick="event.stopPropagation(); askConfirm('Delete Homework', 'Delete this homework?', () => deleteHw('${h.id}'), true)" class="text-gray-400 hover:text-red-500 p-2"><i class="fas fa-trash"></i></button>
+                                </div>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>`;
+            });
+            
+            // Unassigned
+            const unassigned = g.homeworks.filter(h => !h.weekId);
+            if(unassigned.length > 0) {
+                 html += `<div class="bg-white rounded-xl shadow-sm border border-red-200 overflow-hidden mt-4">
+                    <div class="bg-red-50 px-4 py-3 border-b border-red-200 font-bold text-red-700">Unassigned (Missing Week)</div>
+                    <ul class="divide-y divide-gray-100">
+                        ${unassigned.map(h => `<li class="p-4 flex justify-between items-center"><span class="font-semibold">${h.title}</span> <select onchange="updateHwInline('${h.id}', 'weekId', this.value)" class="text-xs border-gray-300 rounded p-1"><option value="">Assign to...</option>${weeks.map(ww => `<option value="${ww.id}">${ww.name}</option>`).join('')}</select></li>`).join('')}
+                    </ul>
+                </div>`;
+            }
+
+            container.innerHTML = html || '<div class="text-center py-10 text-gray-500"><i class="fas fa-book-open text-4xl mb-3 text-gray-300"></i><p>No homework assigned yet.</p></div>';
+        }
+
+        function updateHwInline(id, field, value) {
+            const g = getCurrentGroup();
+            const h = g.homeworks.find(x => x.id === id);
+            if(h && h[field] !== value) {
+                h[field] = value;
+                saveData();
+                if(field === 'weekId') renderHomeworkList(); // Needs structural re-render
+            }
+        }
+        function deleteHw(id) {
+            const g = getCurrentGroup();
+            g.homeworks = g.homeworks.filter(x => x.id !== id);
+            saveData(); renderHomeworkList();
+        }
+
+        // --- HW DETAIL / GRADING ---
+        function openHwDetail(e, hwId) {
+            if(e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+            
+            const g = getCurrentGroup();
+            const hw = g.homeworks.find(x => x.id === hwId);
+            const week = g.weeks.find(x => x.id === hw.weekId);
+            currentHwContext = hwId;
+
+            document.getElementById('detail-hw-title').innerText = hw.title;
+            document.getElementById('detail-hw-week').innerText = week ? week.name : 'No Week';
+            
+            document.getElementById('hw-view-detail').classList.remove('hidden');
+            renderHwGradingTable();
+        }
+        function closeHwDetail() {
+            document.getElementById('hw-view-detail').classList.add('hidden');
+            currentHwContext = null;
+        }
+
+        function renderHwGradingTable() {
+            if(!currentHwContext) return;
+            const g = getCurrentGroup();
+            const tbody = document.getElementById('hwGradingTableBody');
+            
+            // Sort students alphabetically
+            const students = [...g.students].sort((a,b) => a.name.localeCompare(b.name));
+
+            tbody.innerHTML = students.map(s => {
+                const sub = g.submissions[`${currentHwContext}_${s.id}`] || { status: 'none', grade: '' };
+                const isSub = sub.status === 'submitted';
+                const isNotSub = sub.status === 'not-submitted';
+                
+                return `
+                <tr id="hw-row-${s.id}" class="hover:bg-gray-50 transition border-l-4 ${isSub?'border-l-green-500':isNotSub?'border-l-red-500':'border-l-transparent'}">
+                    <td class="px-6 py-3 whitespace-nowrap font-medium text-gray-800">${s.name}</td>
+                    <td class="px-6 py-3 whitespace-nowrap text-center">
+                        <div class="inline-flex rounded-md shadow-sm" role="group">
+                            <button onclick="setHwStatus('${s.id}', 'submitted')" class="px-3 py-1 text-xs font-medium rounded-l-lg border ${isSub ? 'status-submitted z-10' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}">Submitted</button>
+                            <button onclick="setHwStatus('${s.id}', 'not-submitted')" class="px-3 py-1 text-xs font-medium rounded-r-lg border-t border-b border-r ${isNotSub ? 'status-not-submitted z-10' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}">Not Sub.</button>
+                        </div>
+                    </td>
+                    <td class="px-6 py-3 whitespace-nowrap text-center">
+                        <input type="text" value="${sub.grade||''}" onchange="setHwGrade('${s.id}', this.value)" onblur="setHwGrade('${s.id}', this.value)" placeholder="--" class="inline-edit w-16 text-center text-sm font-semibold border-gray-200 bg-gray-50 focus:bg-white">
+                    </td>
+                </tr>
+                `;
+            }).join('');
+        }
+
+        function setHwStatus(studentId, status) {
+            const g = getCurrentGroup();
+            const key = `${currentHwContext}_${studentId}`;
+            if(!g.submissions[key]) g.submissions[key] = { grade: '' };
+            // Toggle off if clicking active
+            if(g.submissions[key].status === status) g.submissions[key].status = 'none';
+            else g.submissions[key].status = status;
+            
+            saveData(true); // Show toast to confirm auto-save
+            renderHwGradingTable();
+        }
+
+        function setHwGrade(studentId, grade) {
+            const g = getCurrentGroup();
+            const key = `${currentHwContext}_${studentId}`;
+            if(!g.submissions[key]) g.submissions[key] = { status: 'none' };
+            if(g.submissions[key].grade !== grade) {
+                g.submissions[key].grade = grade;
+                saveData(true); // Show toast to confirm auto-save
+            }
+        }
+
+        function markAllHw(status) {
+            const g = getCurrentGroup();
+            g.students.forEach(s => {
+                const key = `${currentHwContext}_${s.id}`;
+                if(!g.submissions[key]) g.submissions[key] = { grade: '' };
+                g.submissions[key].status = status;
+            });
+            saveData();
+            renderHwGradingTable();
+        }
+
+        // --- QUIZZES ---
+        function saveQuiz() {
+            const name = document.getElementById('quizName').value.trim();
+            const weekId = document.getElementById('quizWeek').value;
+            const date = document.getElementById('quizDate').value;
+            const max = parseInt(document.getElementById('quizMax').value) || 10;
+            if(!name || !weekId) return alert('Name and Week are required');
+            
+            const g = getCurrentGroup();
+            g.quizzes.push({ id: 'q_'+generateId(), title: name, weekId, date, max });
+            saveData();
+            closeModal();
+            renderQuizList();
+        }
+
+        function renderQuizList() {
+            const g = getCurrentGroup();
+            const container = document.getElementById('quizListContainer');
+            
+            container.innerHTML = g.quizzes.map(q => {
+                const w = g.weeks.find(x => x.id === q.weekId);
+                return `
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col hover:shadow-md transition cursor-pointer relative group" onclick="openQuizDetail(event, '${q.id}')">
+                    <div class="p-4 border-b border-gray-100 flex-1">
+                        <input type="text" value="${q.title}" onblur="updateQuizInline('${q.id}', 'title', this.value)" class="inline-edit font-bold text-gray-800 text-lg mb-1" onclick="event.stopPropagation()">
+                        <div class="flex items-center text-xs text-gray-500 gap-2 mb-2">
+                            <span class="bg-purple-50 text-purple-700 px-2 py-0.5 rounded font-semibold">${w ? w.name : 'No Week'}</span>
+                            <input type="date" value="${q.date}" onblur="updateQuizInline('${q.id}', 'date', this.value)" class="inline-edit w-auto py-0 text-xs" onclick="event.stopPropagation()">
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 p-3 flex justify-between items-center text-xs text-gray-500 border-t border-gray-100">
+                        <span>Max Score: <input type="number" value="${q.max}" onblur="updateQuizInline('${q.id}', 'max', this.value)" class="inline-edit w-12 py-0" onclick="event.stopPropagation()"></span>
+                        <button onclick="event.stopPropagation(); askConfirm('Delete Quiz', 'Delete this quiz?', () => deleteQuiz('${q.id}'), true)" class="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>
+            `}).join('');
+            
+            if(g.quizzes.length === 0) container.innerHTML = '<div class="col-span-full text-center py-10 text-gray-500">No quizzes assigned yet.</div>';
+        }
+
+        function updateQuizInline(id, field, value) {
+            const g = getCurrentGroup();
+            const q = g.quizzes.find(x => x.id === id);
+            if(q && q[field] != value) {
+                q[field] = field === 'max' ? (parseInt(value)||10) : value;
+                saveData();
+                if(field === 'max' && currentQuizContext === id) renderQuizGradingTable(); // re-render detail if open
+            }
+        }
+        function deleteQuiz(id) {
+            const g = getCurrentGroup();
+            g.quizzes = g.quizzes.filter(x => x.id !== id);
+            saveData(); renderQuizList();
+        }
+
+        // --- QUIZ DETAIL / GRADING ---
+        function openQuizDetail(e, qId) {
+            if(e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+            const g = getCurrentGroup();
+            const q = g.quizzes.find(x => x.id === qId);
+            currentQuizContext = qId;
+
+            document.getElementById('detail-quiz-title').innerText = q.title;
+            document.getElementById('detail-quiz-max').innerText = 'Max: ' + q.max;
+            
+            document.getElementById('quiz-view-detail').classList.remove('hidden');
+            renderQuizGradingTable();
+        }
+        function closeQuizDetail() {
+            document.getElementById('quiz-view-detail').classList.add('hidden');
+            currentQuizContext = null;
+        }
+
+        function renderQuizGradingTable() {
+            if(!currentQuizContext) return;
+            const g = getCurrentGroup();
+            const q = g.quizzes.find(x => x.id === currentQuizContext);
+            const tbody = document.getElementById('quizGradingTableBody');
+            
+            const students = [...g.students].sort((a,b) => a.name.localeCompare(b.name));
+
+            tbody.innerHTML = students.map(s => {
+                const rec = g.quizGrades[`${currentQuizContext}_${s.id}`] || { grade: '' };
+                const isComplete = rec.grade !== '';
+                return `
+                <tr id="quiz-row-${s.id}" class="hover:bg-gray-50 transition border-l-4 ${isComplete?'border-l-purple-500':'border-l-transparent'}">
+                    <td class="px-6 py-3 whitespace-nowrap font-medium text-gray-800">${s.name}</td>
+                    <td class="px-6 py-3 whitespace-nowrap text-right">
+                        <div class="flex items-center justify-end gap-2">
+                            <input type="number" step="0.1" max="${q.max}" value="${rec.grade}" onchange="setQuizGrade('${s.id}', this.value)" onkeyup="if(event.key==='Enter') this.blur()" onblur="setQuizGrade('${s.id}', this.value)" placeholder="-" class="inline-edit w-20 text-right font-bold text-gray-800 bg-gray-50 border-gray-200 focus:bg-white text-base">
+                            <span class="text-gray-400 font-medium">/ ${q.max}</span>
+                        </div>
+                    </td>
+                </tr>
+                `;
+            }).join('');
+        }
+
+        function setQuizGrade(studentId, grade) {
+            const g = getCurrentGroup();
+            const key = `${currentQuizContext}_${studentId}`;
+            if(!g.quizGrades[key]) g.quizGrades[key] = {};
+            
+            // Only save and update UI if the grade actually changed
+            if (g.quizGrades[key].grade !== grade) {
+                g.quizGrades[key].grade = grade;
+                saveData(true); // Show toast to confirm auto-save
+                
+                // Highlight row if graded without losing input focus
+                const row = document.getElementById(`quiz-row-${studentId}`);
+                if (row) {
+                    if (grade !== '') row.classList.add('border-l-purple-500');
+                    else row.classList.remove('border-l-purple-500');
+                }
+            }
+        }
+
+        // --- REPORTS ---
+        function populateReportSelector() {
+            const g = getCurrentGroup();
+            const sel = document.getElementById('reportStudentSelector');
+            const sorted = [...g.students].sort((a,b) => a.name.localeCompare(b.name));
+            sel.innerHTML = '<option value="">-- Choose a student --</option>' + 
+                            sorted.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+            document.getElementById('reportContent').classList.add('hidden');
+        }
+
+        function generateStudentReport(studentId) {
+            if(!studentId) { document.getElementById('reportContent').classList.add('hidden'); return; }
+            const g = getCurrentGroup();
+            const s = g.students.find(x => x.id === studentId);
+            document.getElementById('reportContent').classList.remove('hidden');
+            document.getElementById('rep-student-name').innerText = s.name;
+
+            // HW calculations & Table
+            let subCount = 0;
+            const hwBody = document.getElementById('rep-hw-body');
+            hwBody.innerHTML = g.homeworks.map(h => {
+                const w = g.weeks.find(x => x.id === h.weekId);
+                const sub = g.submissions[`${h.id}_${s.id}`] || {};
+                if(sub.status === 'submitted') subCount++;
+                let statusBadge = '<span class="text-gray-400">Pending</span>';
+                if(sub.status === 'submitted') statusBadge = '<span class="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-bold">Submitted</span>';
+                if(sub.status === 'not-submitted') statusBadge = '<span class="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-bold">Not Sub</span>';
+                return `<tr><td class="px-3 py-2">${h.title}</td><td class="px-3 py-2 text-gray-500">${w?w.name:'-'}</td><td class="px-3 py-2">${statusBadge}</td><td class="px-3 py-2 font-medium">${sub.grade||'-'}</td></tr>`;
+            }).join('');
+            
+            const hwPct = g.homeworks.length ? Math.round((subCount/g.homeworks.length)*100) : 0;
+            document.getElementById('rep-hw-comp').innerText = hwPct + '%';
+
+            // Quiz Calculations & Table
+            let quizScoreSum = 0, quizCount = 0;
+            const quizBody = document.getElementById('rep-quiz-body');
+            quizBody.innerHTML = g.quizzes.map(q => {
+                const w = g.weeks.find(x => x.id === q.weekId);
+                const rec = g.quizGrades[`${q.id}_${s.id}`] || {};
+                if(rec.grade && rec.grade !== '') {
+                    quizScoreSum += (Number(rec.grade) / q.max) * 100;
+                    quizCount++;
+                }
+                return `<tr><td class="px-3 py-2">${q.title}</td><td class="px-3 py-2 text-gray-500">${w?w.name:'-'}</td><td class="px-3 py-2 font-bold">${rec.grade||'-'} <span class="text-gray-400 font-normal text-xs">/ ${q.max}</span></td></tr>`;
+            }).join('');
+
+            const quizPct = quizCount ? Math.round(quizScoreSum/quizCount) : 0;
+            document.getElementById('rep-quiz-avg').innerText = quizPct + '%';
+        }
+
+        // --- SETTINGS & DATA EXPORT ---
+        function populateSettings() {
+            document.getElementById('set-last-saved').innerText = appData.settings.lastSaved || 'Never';
+            document.getElementById('set-last-backup').innerText = appData.settings.lastBackup || 'Never';
+            
+            const tbody = document.getElementById('settingsGroupsBody');
+            tbody.innerHTML = appData.groups.map(g => `
+                <tr>
+                    <td class="px-4 py-2"><input type="text" value="${g.name}" onblur="updateGroupName('${g.id}', this.value)" class="inline-edit font-semibold text-gray-800"></td>
+                    <td class="px-4 py-2 text-sm text-gray-600">${g.students.length}</td>
+                    <td class="px-4 py-2 text-right">
+                        ${appData.groups.length > 1 ? `<button onclick="askConfirm('Delete Group', 'Delete entire group ${g.name}? This removes all its students and data.', () => deleteGroup('${g.id}'), true)" class="text-red-500 hover:text-red-700 bg-red-50 px-2 py-1 rounded text-xs font-medium"><i class="fas fa-trash mr-1"></i> Delete</button>` : '<span class="text-xs text-gray-400">Min 1 group req.</span>'}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function updateGroupName(id, name) {
+            if(!name.trim()) return populateSettings();
+            const g = appData.groups.find(x => x.id === id);
+            if(g && g.name !== name) { g.name = name.trim(); saveData(); updateGroupSelectors(); }
+        }
+
+        function addNewGroup() {
+            const newId = 'g_' + generateId();
+            appData.groups.push({
+                id: newId, name: 'New Group', students: [], weeks: [], homeworks: [], quizzes: [], submissions: {}, quizGrades: {}
+            });
+            saveData();
+            updateGroupSelectors();
+            populateSettings();
+        }
+
+        function deleteGroup(id) {
+            if(appData.groups.length <= 1) return;
+            appData.groups = appData.groups.filter(x => x.id !== id);
+            if(appData.currentGroupId === id) appData.currentGroupId = appData.groups[0].id;
+            saveData();
+            updateGroupSelectors();
+            populateSettings();
+            changeGroup(appData.currentGroupId);
+        }
+
+        // --- IMPORT / EXPORT JSON ---
+        function exportDataJSON() {
+            appData.settings.lastBackup = new Date().toLocaleString();
+            saveData();
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", `EduControl_Backup_${new Date().toISOString().slice(0,10)}.json`);
+            document.body.appendChild(downloadAnchorNode); // req for firefox
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+            populateSettings();
+        }
+
+        function importDataJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            // Need native confirm because file input happens outside our modal flow easily
+            if(!confirm("Importing this backup will replace ALL current data. Do you want to continue?")) {
+                event.target.value = ''; return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if(imported.groups && Array.isArray(imported.groups)) {
+                        appData = imported;
+                        saveData();
+                        alert("Data imported successfully!");
+                        window.location.reload(); // Cleanest way to reset UI state
+                    } else { alert("Invalid backup file structure."); }
+                } catch(err) { alert("Error reading file."); console.error(err); }
+            };
+            reader.readAsText(file);
+        }
+
+        // --- EXPORT CSV ---
+        function exportCSV() {
+            const g = getCurrentGroup();
+            let csv = "Group,Student,Homework,Week,Due Date,Submission Status,Homework Grade,Quiz,Quiz Week,Quiz Date,Quiz Grade,Maximum Score\n";
+            
+            const escapeCSV = (str) => `"${(str||'').toString().replace(/"/g, '""')}"`;
+            const groupName = escapeCSV(g.name);
+
+            g.students.forEach(s => {
+                const sName = escapeCSV(s.name);
+                
+                // HW Rows
+                g.homeworks.forEach(h => {
+                    const w = g.weeks.find(x => x.id === h.weekId);
+                    const sub = g.submissions[`${h.id}_${s.id}`] || {};
+                    csv += `${groupName},${sName},${escapeCSV(h.title)},${escapeCSV(w?w.name:'')},${escapeCSV(h.date)},${escapeCSV(sub.status||'')},${escapeCSV(sub.grade||'')},,,,,\n`;
+                });
+
+                // Quiz Rows
+                g.quizzes.forEach(q => {
+                    const w = g.weeks.find(x => x.id === q.weekId);
+                    const rec = g.quizGrades[`${q.id}_${s.id}`] || {};
+                    csv += `${groupName},${sName},,,,,,,${escapeCSV(q.title)},${escapeCSV(w?w.name:'')},${escapeCSV(q.date)},${escapeCSV(rec.grade||'')},${q.max}\n`;
+                });
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `${g.name.replace(/\s+/g,'_')}_Records.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // --- RESET ALL ---
+        function initiateResetAll() {
+            askConfirm("WARNING: DATA DELETION", "WARNING: This will delete ALL academic records from this device for ALL groups.", () => {
+                // Double confirmation via native alert for extreme safety
+                if(confirm("Are you absolutely sure? Make sure you have a backup before continuing. Click OK to DELETE ALL.")) {
+                    localStorage.removeItem(STORAGE_KEY);
+                    window.location.reload();
+                }
+            }, true);
+        }
+
+        // INITIALIZE
+        window.onload = initApp;
+
+    </script>
+</body>
+</html>
